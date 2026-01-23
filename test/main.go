@@ -43,7 +43,7 @@ func main() {
 	defer captcha.ShutdownOCR()
 
 	http.HandleFunc("/login", loginHandler)
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	if err := http.ListenAndServe(":"+fmt.Sprint(serverPort), nil); err != nil {
 		fmt.Printf("服务器启动失败: %v\n", err)
 	}
 
