@@ -19,12 +19,12 @@ import (
 )
 
 const (
-	maxOCRWorkers = 3
-	ocrTimeout    = 2 * time.Second
-	queueTimeout  = 500 * time.Millisecond
+	ocrTimeout   = 2 * time.Second
+	queueTimeout = 500 * time.Millisecond
 )
 
 var (
+	maxOCRWorkers int
 	tesseractPath string
 	ocrSem        chan struct{}
 	tmpDir        string
@@ -34,8 +34,9 @@ var (
 // ======================= 生命周期管理 =======================
 
 // Init 必须在服务启动时调用
-func InitOCR(path string) error {
+func InitOCR(path string, maxNum int) error {
 	tesseractPath = path
+	maxOCRWorkers = maxNum
 	var err error
 	initOnce.Do(func() {
 		ocrSem = make(chan struct{}, maxOCRWorkers)

@@ -23,6 +23,7 @@ import (
 var (
 	serverPort    int
 	tesseractPath string
+	maxOCRWorkers int
 )
 
 const MaxRetry = 5
@@ -36,7 +37,7 @@ func main() {
 	defer logger.Sync()
 
 	//初始化ocr服务
-	if err := captcha.InitOCR(tesseractPath); err != nil {
+	if err := captcha.InitOCR(tesseractPath,maxOCRWorkers); err != nil {
 		panic(err)
 	}
 	defer captcha.ShutdownOCR()
@@ -108,6 +109,7 @@ func init() {
 	// 1. 定义命令行参数
 	flag.IntVar(&serverPort, "p", 0, "服务器端口(must)")
 	flag.StringVar(&customTessPath, "T", "", "Tesseract可执行文件路径")
+	flag.IntVar(&maxOCRWorkers, "-w", 3, "OCR服务多开数")
 
 	// 2. 解析参数
 	flag.Parse()
@@ -115,6 +117,12 @@ func init() {
 	// 3. 验证端口参数
 	if serverPort <= 0 || serverPort > 65535 {
 		fmt.Printf("错误: 端口号必须为 1-65535 之间的数字，当前值: %d\n", serverPort)
+		printUsage()
+		os.Exit(1)
+	}
+
+	if maxOCRWorkers <= 0 || maxOCRWorkers > 50 {
+		fmt.Printf("错误: maxOCRWorkers数量不合法, 请不要把内存当儿戏, 当前值: %d\n", maxOCRWorkers)
 		printUsage()
 		os.Exit(1)
 	}
