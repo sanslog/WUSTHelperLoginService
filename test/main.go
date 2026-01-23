@@ -37,7 +37,7 @@ func main() {
 	defer logger.Sync()
 
 	//初始化ocr服务
-	if err := captcha.InitOCR(tesseractPath,maxOCRWorkers); err != nil {
+	if err := captcha.InitOCR(tesseractPath, maxOCRWorkers); err != nil {
 		panic(err)
 	}
 	defer captcha.ShutdownOCR()
@@ -107,7 +107,7 @@ func init() {
 	var customTessPath string
 
 	// 1. 定义命令行参数
-	flag.IntVar(&serverPort, "p", 0, "服务器端口(must)")
+	flag.IntVar(&serverPort, "p", 0, "服务器端口")
 	flag.StringVar(&customTessPath, "T", "", "Tesseract可执行文件路径")
 	flag.IntVar(&maxOCRWorkers, "-w", 3, "OCR服务多开数")
 
@@ -122,7 +122,7 @@ func init() {
 	}
 
 	if maxOCRWorkers <= 0 || maxOCRWorkers > 50 {
-		fmt.Printf("错误: maxOCRWorkers数量不合法, 请不要把内存当儿戏, 当前值: %d\n", maxOCRWorkers)
+		fmt.Printf("错误: maxOCRWorkers数量不合法, 请不要把内存当儿戏,你知道2026年初的内存条有多贵吗? 当前值: %d\n", maxOCRWorkers)
 		printUsage()
 		os.Exit(1)
 	}
@@ -154,7 +154,7 @@ func resolveTesseractPath(userPath string) (string, error) {
 		return filepath.Clean(userPath), nil
 	}
 
-	fmt.Println("未指定Tesseract路径，开始自动查找...")
+	fmt.Println("未指定Tesseract路径, 开始自动查找...")
 
 	// 根据平台使用不同的查找策略
 	switch runtime.GOOS {
@@ -274,11 +274,11 @@ func printUsage() {
 	fmt.Println("\n参数说明:")
 	fmt.Println("  -p  服务器端口 (1-65535，必须)")
 	fmt.Println("  -T  Tesseract可执行文件路径 (可选，为空则自动查找)")
+	fmt.Println("  -W  这个值表示你想分配给Tesseract的内存规模")
 	fmt.Println("\n示例:")
 	fmt.Printf("  myapp.exe -p 8080\n")
-	fmt.Printf("  myapp.exe -p 8080 -T C:\\Users\\AppData\\Local\\Programs\\Tesseract-OCR\\tesseract.exe\n")
+	fmt.Printf("  myapp.exe -p 8080 -T C:\\User\\AppData\\Local\\Programs\\Tesseract-OCR\\tesseract.exe\n")
 	fmt.Println("\n自动查找策略:")
 	fmt.Println("  1. 检查PATH环境变量")
-	fmt.Println("  2. 检查平台常见安装路径")
-	fmt.Println("  3. 检查TESSERACT_PATH环境变量")
+	fmt.Println("  2. 检查TESSERACT_PATH环境变量")
 }
