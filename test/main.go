@@ -2,10 +2,9 @@ package main
 
 import (
 	"WUSThelperLoginSystem/test/captcha"
-	"WUSThelperLoginSystem/test/sever"
+	nethandler "WUSThelperLoginSystem/test/netHandler"
 	logger "WUSThelperLoginSystem/test/util"
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
@@ -15,8 +14,6 @@ import (
 	"runtime"
 	"strings"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 // 全局配置变量
@@ -42,64 +39,12 @@ func main() {
 	}
 	defer captcha.ShutdownOCR()
 
-	http.HandleFunc("/login", loginHandler)
+	http.HandleFunc("/login", nethandler.LoginHandler)
+	// http.HandleFunc("/login/refresh", nethandler.RefreshHandler)
 	if err := http.ListenAndServe(":"+fmt.Sprint(serverPort), nil); err != nil {
 		fmt.Printf("服务器启动失败: %v\n", err)
 	}
 
-}
-
-func loginHandler(w http.ResponseWriter, r *http.Request) {
-	// 只允许 POST
-	if r.Method != http.MethodPost {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		_, _ = w.Write([]byte(`{"error":"only POST is allowed"}`))
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-	// 限制请求体大小
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	defer r.Body.Close()
-
-	//解析请求体json字符串
-	decoder := json.NewDecoder(r.Body)
-	decoder.UseNumber()
-
-	var data map[string]string
-	if err := decoder.Decode(&data); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(`{"bzb_jsxsd":"","SERVERID":"","error":"invalid json format"}`))
-		logger.Log.Error("login---json解析失败", zap.Error(err))
-		return
-	}
-
-	username := strings.TrimSpace(data["username"])
-	password := strings.TrimSpace(data["password"])
-
-	if username == "" || password == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(`{"bzb_jsxsd":"","SERVERID":"","error":"username or password is empty"}`))
-		return
-	}
-
-	// 登录逻辑
-	ctx := r.Context()
-	bzbj, serverID, loginErr := sever.MockLogin(ctx, username, password)
-
-	if loginErr != nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		_, _ = w.Write([]byte(`{"bzb_jsxsd":"","SERVERID":"","error":"` + loginErr.Error() + `"}`))
-		return
-	}
-
-	// 成功返回
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(
-		`{"bzb_jsxsd":"` + bzbj + `","SERVERID":"` + serverID + `","error":""}`,
-	))
 }
 
 // 初始化函数：解析命令行参数

@@ -14,7 +14,7 @@ import (
 // 对于登录请求因为codefalse导致的请求失败所进行的最大重试次数
 const maxRetry = 5
 
-func MockLogin(ctx context.Context, username, rawPassword string) (string, string, error) {
+func MockLogin(ctx context.Context, username, rawPassword string) (string, string, string, error) {
 
 	tryTimes := 0
 
@@ -44,7 +44,7 @@ retryHere:
 	kapMsg, GetKaptchaJSONErr := captcha.GetKaptchaJSON(client)
 	if GetKaptchaJSONErr != nil {
 		logger.Log.Error("uid生成失败: " + GetKaptchaJSONErr.Error())
-		return "", "", errors.New("服务器内部错误")
+		return "", "", "", errors.New("服务器内部错误")
 	}
 
 	/*第二步，获取验证码计算值*/
@@ -58,7 +58,7 @@ retryHere:
 			goto retryHere
 		}
 
-		return "", "", errors.New("服务器内部错误")
+		return "", "", "", errors.New("服务器内部错误")
 	}
 
 	/*第三步，获取ticket*/
@@ -73,7 +73,7 @@ retryHere:
 			}
 		}
 
-		return "", "", ticketErr
+		return "", "", "", ticketErr
 	}
 
 	/*<p>第四步，两次重定向对CAS服务器进行验证</p>
@@ -83,8 +83,8 @@ retryHere:
 	logger.Log.Info("用户" + username + ": bzbj:" + bzbj + " severID:" + severID)
 	if cookieErr != nil {
 		logger.Log.Error("获取cookie失败: " + cookieErr.Error())
-		return "", "", errors.New("服务器内部错误")
+		return "", "", "", errors.New("服务器内部错误")
 	}
 
-	return bzbj, severID, nil
+	return bzbj, severID, result.Tgt, nil
 }
