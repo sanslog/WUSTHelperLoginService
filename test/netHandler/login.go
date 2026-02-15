@@ -60,7 +60,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(
 		`{
-			"cookie":"` + bzbj + `,` + serverID + `",
+			"cookie":"bzb_jsxsd=` + bzbj + `;SERVERID=` + serverID + `",
 			"TGC":"` + tgc + `"
 		}`,
 	))
