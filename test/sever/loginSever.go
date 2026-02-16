@@ -83,6 +83,9 @@ retryHere:
 	// logger.Log.Info("用户" + username + ": bzbj:" + bzbj + " severID:" + severID)
 	if cookieErr != nil {
 		logger.Log.Error("获取cookie失败: " + cookieErr.Error())
+		if cookieErr == context.DeadlineExceeded {
+			return "", "", "", errors.New("教务系统异常超时")
+		}
 		return "", "", "", errors.New("forbidden!服务器内部错误，请不要在浏览器处于登录教务系统的状态上使用此系统，出于道德、法律上的考量，本系统不提供强制下线功能")
 	}
 
