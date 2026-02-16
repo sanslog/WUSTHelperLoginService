@@ -2,7 +2,9 @@
 同时该程序依赖于一个提供ocr服务的软件：Tesseract-OCR
 
 特色：
+
 * 使用exec调用ocr服务，实现了跨平台统一，极大简化了Tesseract的配置
 * 针对ocr服务进行了调优，确保了高并发场景下Tesseract内存不会与goroutine呈线性增长最后导致内存爆炸
 * 使用原生http库实现web服务，代码清晰简洁易用
 * 极为完善的注释，每一步都经过我深思熟虑
+* 集成了docker容器化技术，Dockerfile采取分阶段构建、优化体积

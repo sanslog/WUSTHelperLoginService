@@ -80,10 +80,10 @@ retryHere:
 	* <p>这里我采取手动重定向，避免浪费网络请求资源</p>
 	 */
 	bzbj, severID, cookieErr := ticket.FetchBKJXCookies(client, result.Ticket)
-	logger.Log.Info("用户" + username + ": bzbj:" + bzbj + " severID:" + severID)
+	// logger.Log.Info("用户" + username + ": bzbj:" + bzbj + " severID:" + severID)
 	if cookieErr != nil {
 		logger.Log.Error("获取cookie失败: " + cookieErr.Error())
-		return "", "", "", errors.New("forbidden!\n服务器内部错误，请不要在浏览器处于登录教务系统的状态上使用此系统，出于道德、法律上的考量，本系统不提供强制下线功能")
+		return "", "", "", errors.New("forbidden!服务器内部错误，请不要在浏览器处于登录教务系统的状态上使用此系统，出于道德、法律上的考量，本系统不提供强制下线功能")
 	}
 
 	return bzbj, severID, result.Tgt, nil
