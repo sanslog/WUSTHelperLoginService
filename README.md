@@ -8,3 +8,7 @@
 * 使用原生http库实现web服务，代码清晰简洁易用
 * 极为完善的注释，每一步都经过我深思熟虑
 * 集成了docker容器化技术，Dockerfile采取分阶段构建、优化体积
+
+使用：
+
+目前仅有/login接口可用，post请求json格式带上username和password，返回cookie和TGC
