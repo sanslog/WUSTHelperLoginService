@@ -1,9 +1,9 @@
 package main
 
 import (
-	"WUSThelperLoginSystem/test/captcha"
-	nethandler "WUSThelperLoginSystem/test/netHandler"
-	logger "WUSThelperLoginSystem/test/util"
+	"WUSThelperLoginSystem/src/captcha"
+	nethandler "WUSThelperLoginSystem/src/netHandler"
+	logger "WUSThelperLoginSystem/src/util"
 	"context"
 	"flag"
 	"fmt"

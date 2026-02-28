@@ -1,9 +1,9 @@
 package sever
 
 import (
-	"WUSThelperLoginSystem/test/captcha"
-	"WUSThelperLoginSystem/test/ticket"
-	logger "WUSThelperLoginSystem/test/util"
+	"WUSThelperLoginSystem/src/captcha"
+	"WUSThelperLoginSystem/src/ticket"
+	logger "WUSThelperLoginSystem/src/util"
 	"context"
 	"errors"
 	"net/http"

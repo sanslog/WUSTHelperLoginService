@@ -1,7 +1,8 @@
 package nethandler
 
 import (
-	logger "WUSThelperLoginSystem/test/util"
+	"WUSThelperLoginSystem/src/sever"
+	logger "WUSThelperLoginSystem/src/util"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -9,7 +10,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func RefreshHandler(w http.ResponseWriter, r *http.Request) {
+func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	// 只允许 POST
 	if r.Method != http.MethodPost {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -31,22 +32,36 @@ func RefreshHandler(w http.ResponseWriter, r *http.Request) {
 	var data map[string]string
 	if err := decoder.Decode(&data); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(`"error":"invalid json format"}`))
+		_, _ = w.Write([]byte(`{"error":"invalid json format"}`))
 		logger.Log.Error("login---json解析失败", zap.Error(err))
 		return
 	}
 
-	tgc := strings.TrimSpace(data["TGC"])
+	username := strings.TrimSpace(data["username"])
+	password := strings.TrimSpace(data["password"])
 
-	if tgc == "" {
+	if username == "" || password == "" {
 		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(`{"error":"TGC is empty"}`))
+		_, _ = w.Write([]byte(`{"error":"username or password is empty"}`))
+		return
+	}
+
+	// 登录逻辑
+	ctx := r.Context()
+	bzbj, serverID, tgc, loginErr := sever.MockLogin(ctx, username, password)
+
+	if loginErr != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":"` + loginErr.Error() + `"}`))
 		return
 	}
 
 	// 成功返回
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(
-		`{"message":"功能仍在开发中"}`,
+		`{
+			"cookie":"bzb_jsxsd=` + bzbj + `;SERVERID=` + serverID + `",
+			"TGC":"` + tgc + `"
+		}`,
 	))
 }
