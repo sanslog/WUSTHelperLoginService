@@ -1,4 +1,4 @@
-# docker build -f docker/Dockerfile .
+# 根目录运行 docker build -f docker/Dockerfile .
 
 # 编译阶段
 FROM  golang:1.25.5-alpine3.22 AS builder
