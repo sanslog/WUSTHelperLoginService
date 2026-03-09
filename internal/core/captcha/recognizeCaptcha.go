@@ -20,7 +20,7 @@ import (
 
 const (
 	ocrTimeout   = 2 * time.Second
-	queueTimeout = 500 * time.Millisecond
+	queueTimeout = 1000 * time.Millisecond
 )
 
 var (

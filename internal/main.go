@@ -54,7 +54,7 @@ func init() {
 	// 1. 定义命令行参数
 	flag.IntVar(&serverPort, "p", 0, "服务器端口")
 	flag.StringVar(&customTessPath, "T", "", "Tesseract可执行文件路径")
-	flag.IntVar(&maxOCRWorkers, "w", 3, "OCR服务多开数")
+	flag.IntVar(&maxOCRWorkers, "w", 3, "OCR服务缓冲通道大小,理想下w=cpu cores*1.5")
 
 	// 2. 解析参数
 	flag.Parse()

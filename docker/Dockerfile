@@ -32,4 +32,4 @@ COPY --from=builder /app/myapp .
 EXPOSE 8080
 
 ENTRYPOINT ["/root/myapp"]
-CMD ["-p=8080", "-T=/usr/bin/tesseract"]
+CMD ["-p=8080", "-T=/usr/bin/tesseract","-w=3"]
