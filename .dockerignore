@@ -1,21 +1,36 @@
 ## 先忽略所有文件
-#**
+
+# **
+
 #
+
 ## 允许 Go 依赖文件
-#!go.mod
-#!go.sum
+
+# !go.mod
+# !go.sum
+
 #
+
 ## 允许 test 目录
-#!test/
-#!test/**
+
+# !test/
+# !test/**
+
 #
-#!**/*.go
+
+# !**/*.go
+
 #
+
 ## 允许 Dockerfile
-#!docker/Dockerfile
+
+# !docker/Dockerfile
+
 #
+
 ## 允许 .dockerignore 自身
-#!.dockerignore
+
+# !.dockerignore
 logs/
 
 README.md
@@ -25,3 +40,5 @@ request.py
 .git/
 
 .gitignore
+
+build

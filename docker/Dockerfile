@@ -16,7 +16,7 @@ RUN go mod download
 
 COPY . .
 
-RUN  go build -ldflags="-s -w" -o myapp ./test
+RUN  go build -ldflags="-s -w" -o myapp ./internal
 
 #构建阶段
 FROM alpine:3.22
