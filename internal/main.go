@@ -21,6 +21,7 @@ var (
 	serverPort    int
 	tesseractPath string
 	maxOCRWorkers int
+	queueSize     int
 )
 
 const MaxRetry = 5
@@ -34,9 +35,7 @@ func main() {
 	defer logger.Sync()
 
 	//初始化ocr服务
-	if err := captcha.InitOCR(tesseractPath, maxOCRWorkers); err != nil {
-		panic(err)
-	}
+	captcha.InitOCR(maxOCRWorkers, queueSize)
 	defer captcha.ShutdownOCR()
 
 	http.HandleFunc("/login", handler.LoginHandler)
@@ -54,7 +53,8 @@ func init() {
 	// 1. 定义命令行参数
 	flag.IntVar(&serverPort, "p", 0, "服务器端口")
 	flag.StringVar(&customTessPath, "T", "", "Tesseract可执行文件路径")
-	flag.IntVar(&maxOCRWorkers, "w", 3, "OCR服务缓冲通道大小,理想下w=cpu cores*1.5")
+	flag.IntVar(&maxOCRWorkers, "w", 3, "OCR服务Worker Pool大小,理想下w=cpu cores*1.5")
+	flag.IntVar(&queueSize, "qs", 150, "有界任务队列大小")
 
 	// 2. 解析参数
 	flag.Parse()
@@ -68,6 +68,12 @@ func init() {
 
 	if maxOCRWorkers <= 0 || maxOCRWorkers > 50 {
 		fmt.Printf("错误: maxOCRWorkers数量不合法, 请不要把内存当儿戏,你知道2026年初的内存条有多贵吗? 当前值: %d\n", maxOCRWorkers)
+		printUsage()
+		os.Exit(1)
+	}
+
+	if queueSize <= 0 || queueSize > 1500 {
+		fmt.Printf("错误：缓冲队列大小不符合标准。")
 		printUsage()
 		os.Exit(1)
 	}
@@ -222,7 +228,7 @@ func printUsage() {
 	fmt.Println("  -W  这个值表示你想分配给Tesseract的内存规模")
 	fmt.Println("\n示例:")
 	fmt.Printf("  myapp.exe -p 8080\n")
-	fmt.Printf("  myapp.exe -p 8080 -T C:\\User\\AppData\\Local\\Programs\\Tesseract-OCR\\tesseract.exe\n")
+	fmt.Printf("  myapp.exe -p 8080 -T C:\\User\\AppData\\Local\\Programs\\Tesseract-OCR\\tesseract.exe -w=3\n")
 	fmt.Println("\n自动查找策略:")
 	fmt.Println("  1. 检查PATH环境变量")
 	fmt.Println("  2. 检查TESSERACT_PATH环境变量")

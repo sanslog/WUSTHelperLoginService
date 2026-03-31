@@ -9,13 +9,14 @@ import (
 	"image/color"
 	"image/png"
 	"math"
-	"os"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/otiai10/gosseract/v2"
 )
 
 const (
@@ -23,104 +24,154 @@ const (
 	queueTimeout = 1000 * time.Millisecond
 )
 
+// ======================= 数据结构 =======================
+
+type ocrTask struct {
+	img  []byte
+	resp chan ocrResult
+}
+
+type ocrResult struct {
+	text string
+	err  error
+}
+
+// ======================= 全局状态 =======================
+
 var (
-	maxOCRWorkers int
-	tesseractPath string
-	ocrSem        chan struct{}
-	tmpDir        string
-	initOnce      sync.Once
+	taskQueue chan ocrTask
+
+	workerNum int
+
+	wgWorkers  sync.WaitGroup // worker 生命周期
+	wgTasks    sync.WaitGroup // 任务计数（优雅关闭用）
+	initOnce   sync.Once
+	shutdownMu sync.Mutex
+
+	closed int32 // 0=运行中 1=关闭中
 )
 
-// ======================= 生命周期管理 =======================
-
-// Init 必须在服务启动时调用
-func InitOCR(path string, maxNum int) error {
-	tesseractPath = path
-	maxOCRWorkers = maxNum
-	var err error
+// InitOCR 初始化
+func InitOCR(workers int, queueSize int) {
 	initOnce.Do(func() {
-		ocrSem = make(chan struct{}, maxOCRWorkers)
-		tmpDir, err = os.MkdirTemp("", "ocr-runtime-*")
+		workerNum = workers
+		taskQueue = make(chan ocrTask, queueSize)
+
+		for i := 0; i < workerNum; i++ {
+			wgWorkers.Add(1)
+			go startWorker()
+		}
 	})
-	return err
+
 }
 
-// Shutdown 在服务关闭时调用
+// worker：每个 goroutine 独占一个 client
+func startWorker() {
+	defer wgWorkers.Done()
+
+	client := gosseract.NewClient()
+	defer client.Close()
+
+	client.SetPageSegMode(gosseract.PSM_SINGLE_LINE)
+	client.SetWhitelist("0123456789+-*/=")
+
+	for task := range taskQueue {
+
+		// 同步执行 OCR（绝不并发）
+		err := client.SetImageFromBytes(task.img)
+		if err != nil {
+			safeSend(task.resp, ocrResult{"", err})
+			wgTasks.Done()
+			continue
+		}
+
+		text, err := client.Text()
+		safeSend(task.resp, ocrResult{text, err})
+
+		wgTasks.Done()
+	}
+}
+
+func safeSend(ch chan ocrResult, r ocrResult) {
+	defer func() {
+		if recover() != nil {
+			// 防止调用方已放弃接收导致 panic
+		}
+	}()
+	ch <- r
+}
+
+// Shutdown
 func ShutdownOCR() {
-	if tmpDir != "" {
-		_ = os.RemoveAll(tmpDir)
+
+	shutdownMu.Lock()
+	defer shutdownMu.Unlock()
+	if !atomic.CompareAndSwapInt32(&closed, 0, 1) {
+		return
 	}
+	wgTasks.Wait()
+	close(taskQueue)
+	wgWorkers.Wait()
 }
 
-// ======================= 对外主入口 =======================
-// 实现了资源池模式
+// =========================== 主入口 ==========================
 func RecognizeMathCaptcha(ctx context.Context, img64 string) (float64, error) {
-	// 获取 OCR slot（带超时）
-	select {
-	case ocrSem <- struct{}{}:
-		defer func() { <-ocrSem }()
-	case <-time.After(queueTimeout):
-		return 0, fmt.Errorf("OCR 队列繁忙")
-	case <-ctx.Done():
-		return 0, ctx.Err()
-	}
 
 	processed, err := preprocessCaptcha(img64)
 	if err != nil {
-		return 0, fmt.Errorf("预处理失败: %w", err)
+		return 0, err
 	}
 
-	text, err := runTesseractOCR(processed)
+	text, err := runOCR(ctx, processed)
 	if err != nil {
-		return 0, fmt.Errorf("OCR 失败: %w", err)
+		return 0, err
 	}
 
 	return calculateExpression(cleanText(text))
 }
 
-// ======================= OCR 调用 =======================
+func runOCR(ctx context.Context, img []byte) (string, error) {
 
-func runTesseractOCR(img []byte) (string, error) {
-	f, err := os.CreateTemp(tmpDir, "ocr-*.png")
-	if err != nil {
-		return "", err
-	}
-	defer func() {
-		f.Close()
-		os.Remove(f.Name())
-	}()
-
-	if _, err := f.Write(img); err != nil {
-		return "", err
+	// 已关闭直接拒绝
+	if atomic.LoadInt32(&closed) == 1 {
+		return "", fmt.Errorf("OCR服务已关闭")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), ocrTimeout)
-	defer cancel()
+	resp := make(chan ocrResult, 1)
 
-	cmd := exec.CommandContext(
-		ctx,
-		tesseractPath,
-		f.Name(),
-		"stdout",
-		"--oem", "1",
-		"--psm", "7",
-		"-c", "tessedit_char_whitelist=0123456789+-*/=xX",
-	)
-
-	cmd.Env = append(os.Environ(),
-		"OMP_THREAD_LIMIT=1",
-		"OMP_NUM_THREADS=1",
-	)
-
-	var out, errBuf bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &errBuf
-
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("%v (%s)", err, errBuf.String())
+	task := ocrTask{
+		img:  img,
+		resp: resp,
 	}
 
-	return strings.TrimSpace(out.String()), nil
+	// 增加任务计数（必须在投递前）
+	wgTasks.Add(1)
+
+	// 投递任务（带超时）
+	select {
+	case taskQueue <- task:
+	case <-time.After(queueTimeout):
+		wgTasks.Done()
+		return "", fmt.Errorf("OCR队列已满")
+	case <-ctx.Done():
+		wgTasks.Done()
+		return "", ctx.Err()
+	}
+
+	// 等待结果
+	select {
+	case r := <-resp:
+		if r.err != nil {
+			return "", r.err
+		}
+		return strings.TrimSpace(r.text), nil
+
+	case <-ctx.Done():
+		return "", ctx.Err()
+
+	case <-time.After(ocrTimeout):
+		return "", fmt.Errorf("OCR超时")
+	}
 }
 
 // ======================= 图片预处理 =======================
@@ -148,13 +199,8 @@ func preprocessCaptcha(img64 string) ([]byte, error) {
 			g8 := uint8(g >> 8)
 			b8 := uint8(b >> 8)
 
-			// 原始灰度
-			y0 := uint8(
-				(299*uint32(r8) + 587*uint32(g8) + 114*uint32(b8)) / 1000,
-			)
+			y0 := uint8((299*uint32(r8) + 587*uint32(g8) + 114*uint32(b8)) / 1000)
 
-			// ===== 关键补偿逻辑 =====
-			// 高亮但非白的彩色字符，主动压暗
 			if isLightColorButNotWhite(r8, g8, b8) {
 				if y0 > 160 {
 					y0 = 160
@@ -186,55 +232,7 @@ func preprocessCaptcha(img64 string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func isLightColorButNotWhite(r, g, b uint8) bool {
-	max := max3(r, g, b)
-	min := min3(r, g, b)
-
-	// 非白（防止误伤背景）
-	if r > 240 && g > 240 && b > 240 {
-		return false
-	}
-
-	// 亮度高
-	if max < 180 {
-		return false
-	}
-
-	// 有颜色差（说明不是灰）
-	if max-min < 12 {
-		return false
-	}
-
-	return true
-}
-
-func max3(a, b, c uint8) uint8 {
-	if a > b {
-		if a > c {
-			return a
-		}
-		return c
-	}
-	if b > c {
-		return b
-	}
-	return c
-}
-
-func min3(a, b, c uint8) uint8 {
-	if a < b {
-		if a < c {
-			return a
-		}
-		return c
-	}
-	if b < c {
-		return b
-	}
-	return c
-}
-
-// ======================= 文本处理 & 计算 =======================
+// ======================= 文本处理 =======================
 
 func cleanText(text string) string {
 	text = regexp.MustCompile(`\s+`).ReplaceAllString(text, "")
@@ -263,6 +261,7 @@ func calculateExpression(text string) (float64, error) {
 			if err1 != nil || err2 != nil {
 				return 0, fmt.Errorf("数字解析失败")
 			}
+
 			switch text[i] {
 			case '+':
 				return a + b, nil
@@ -279,7 +278,6 @@ func calculateExpression(text string) (float64, error) {
 		}
 	}
 
-	fmt.Println("code_text:", text) //TODO: 删除多余输出语句
 	return 0, fmt.Errorf("未识别运算符")
 }
 
@@ -292,11 +290,47 @@ func decodeBase64(s string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(s)
 }
 
+func isLightColorButNotWhite(r, g, b uint8) bool {
+	if r > 240 && g > 240 && b > 240 {
+		return false
+	}
+	max := max3(r, g, b)
+	min := min3(r, g, b)
+	return max >= 180 && (max-min) >= 12
+}
+
+func max3(a, b, c uint8) uint8 {
+	if a > b {
+		if a > c {
+			return a
+		}
+		return c
+	}
+	if b > c {
+		return b
+	}
+	return c
+}
+
+func min3(a, b, c uint8) uint8 {
+	if a < b {
+		if a < c {
+			return a
+		}
+		return c
+	}
+	if b < c {
+		return b
+	}
+	return c
+}
+
 func otsu(hist [256]int, total int) int {
 	var sum int
 	for i := 0; i < 256; i++ {
 		sum += i * hist[i]
 	}
+
 	var sumB, wB, max int
 	var t1, t2 int
 
@@ -309,10 +343,13 @@ func otsu(hist [256]int, total int) int {
 		if wF == 0 {
 			break
 		}
+
 		sumB += i * hist[i]
 		mB := float64(sumB) / float64(wB)
 		mF := float64(sum-sumB) / float64(wF)
+
 		v := float64(wB*wF) * (mB - mF) * (mB - mF)
+
 		if int(v) >= max {
 			if int(v) > max {
 				max = int(v)
@@ -322,5 +359,6 @@ func otsu(hist [256]int, total int) int {
 			}
 		}
 	}
+
 	return (t1 + t2) / 2
 }
