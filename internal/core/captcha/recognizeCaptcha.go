@@ -101,7 +101,7 @@ func safeSend(ch chan ocrResult, r ocrResult) {
 	ch <- r
 }
 
-// Shutdown
+// Shutdown，释放ocr进程
 func ShutdownOCR() {
 
 	shutdownMu.Lock()
