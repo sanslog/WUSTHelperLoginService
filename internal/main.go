@@ -227,12 +227,12 @@ func validateTesseract(path string) error {
 // printUsage 打印用法信息
 func printUsage() {
 	fmt.Println("\n用法:")
-	fmt.Println("  myapp.exe -p <端口号> [-T <Tesseract路径>]")
+	fmt.Println("  myapp -p <端口号> [-T <Tesseract路径>]")
 	fmt.Println("\n参数说明:")
 	fmt.Println("  -p  服务器端口 (1-65535，必须)")
 	fmt.Println("  -T  Tesseract可执行文件路径 (可选，为空则自动查找)")
 	fmt.Println("  -W  这个值表示你想分配给Tesseract的内存规模")
-	fmt.Println("\n示例:")
+	fmt.Println("\nWindows平台示例:")
 	fmt.Printf("  myapp.exe -p 8080\n")
 	fmt.Printf("  myapp.exe -p 8080 -T C:\\User\\AppData\\Local\\Programs\\Tesseract-OCR\\tesseract.exe -w=3\n")
 	fmt.Println("\n自动查找策略:")
