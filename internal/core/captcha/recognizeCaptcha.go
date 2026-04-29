@@ -1,6 +1,7 @@
 package captcha
 
 import (
+	logger "WUSThelperLoginSystem/internal/util"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -19,24 +20,13 @@ import (
 	"github.com/otiai10/gosseract/v2"
 )
 
-const (
-	ocrTimeout   = 2 * time.Second
-	queueTimeout = 1000 * time.Millisecond
-)
-
-// ======================= 数据结构 =======================
-
-type ocrTask struct {
-	img  []byte
-	resp chan ocrResult
-}
-
-type ocrResult struct {
-	text string
-	err  error
-}
-
 // ======================= 全局状态 =======================
+
+const (
+	ocrTimeout                = 2 * time.Second
+	queueTimeout              = 1000 * time.Millisecond
+	clearDictCahceLimit int32 = 2000
+)
 
 var (
 	taskQueue chan ocrTask
@@ -48,19 +38,35 @@ var (
 	initOnce   sync.Once
 	shutdownMu sync.Mutex
 
-	closed int32 // 0=运行中 1=关闭中
+	closed    int32 // 0=运行中 1=关闭中
+	ocrCount  int32 //计数器
+	cleanChan chan struct{}
 )
+
+// ======================= 数据结构 =======================
+type ocrTask struct {
+	img  []byte
+	resp chan ocrResult
+}
+
+type ocrResult struct {
+	text string
+	err  error
+}
+
+//=======================生命周期相关函数==================
 
 // InitOCR 初始化
 func InitOCR(workers int, queueSize int) {
 	initOnce.Do(func() {
 		workerNum = workers
 		taskQueue = make(chan ocrTask, queueSize)
-
+		cleanChan = make(chan struct{})
 		for i := 0; i < workerNum; i++ {
 			wgWorkers.Add(1)
 			go startWorker()
 		}
+		go cleanDictCache()
 	})
 
 }
@@ -89,6 +95,8 @@ func startWorker() {
 		safeSend(task.resp, ocrResult{text, err})
 
 		wgTasks.Done()
+		atomic.AddInt32(&ocrCount, 1)
+		validCleanCount()
 	}
 }
 
@@ -111,10 +119,47 @@ func ShutdownOCR() {
 	}
 	wgTasks.Wait()
 	close(taskQueue)
+	close(cleanChan)
 	wgWorkers.Wait()
 }
 
+// tessarct-OCR清理字典缓存
+func cleanDictCache() {
+	for {
+		//阻塞等待
+		_, ok := <-cleanChan
+		//协程退出
+		if !ok {
+			break
+		}
+		gosseract.ClearPersistentCache()
+		logger.Log.Info("完成一次字典缓存清理")
+	}
+}
+
+func validCleanCount() {
+	if old := atomic.LoadInt32(&ocrCount); old >= clearDictCahceLimit {
+		for {
+			// 再次原子读取最新值（防止并发被修改）
+			current := atomic.LoadInt32(&ocrCount)
+			// 如果最新值已经 < 阈值了，说明被别的协程清过了，直接退出
+			if current < clearDictCahceLimit {
+				break
+			}
+			// 原子 CAS：只有当前值还是 current，才置 0
+			if atomic.CompareAndSwapInt32(&ocrCount, current, 0) {
+				// 成功清零，current 就是你取到的值
+				logger.Log.Info("触发tessarct清理字典缓存")
+				cleanChan <- struct{}{}
+				break
+			}
+			// CAS 失败 = 并发被改了，自动重试
+		}
+	}
+}
+
 // =========================== 主入口 ==========================
+// 提供给外部调用ocr服务的接口
 func RecognizeMathCaptcha(ctx context.Context, img64 string) (float64, error) {
 
 	processed, err := preprocessCaptcha(img64)
@@ -155,7 +200,7 @@ func runOCR(ctx context.Context, img []byte) (string, error) {
 		return "", fmt.Errorf("OCR队列已满")
 	case <-ctx.Done():
 		wgTasks.Done()
-		return "", ctx.Err()
+		return "", ctx.Err() //上游context取消
 	}
 
 	// 等待结果
