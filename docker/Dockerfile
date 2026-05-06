@@ -47,5 +47,8 @@ ENV OMP_THREAD_LIMIT=1
 
 EXPOSE 8080
 
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD pgrep -f "./app" || exit 1
+
 ENTRYPOINT ["./app"]
 CMD ["-p=8080", "-w=3"]
