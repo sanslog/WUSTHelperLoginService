@@ -197,7 +197,7 @@ func runOCR(ctx context.Context, img []byte) (string, error) {
 	case taskQueue <- task:
 	case <-time.After(queueTimeout):
 		wgTasks.Done()
-		return "", fmt.Errorf("OCR队列已满")
+		return "", fmt.Errorf("服务器繁忙，请稍后重试")
 	case <-ctx.Done():
 		wgTasks.Done()
 		return "", ctx.Err() //上游context取消
