@@ -40,16 +40,21 @@ func main() {
 	captcha.InitOCR(maxOCRWorkers, queueSize)
 	defer captcha.ShutdownOCR()
 
-	http.HandleFunc("/login", handler.LoginHandler)
-	// http.HandleFunc("/login/refresh", nethandler.RefreshHandler)
-	if err := http.ListenAndServe(":"+fmt.Sprint(serverPort), nil); err != nil {
-		fmt.Printf("服务器启动失败: %v\n", err)
-	}
-
-	//正常退出程序逻辑，代码上的解释就是手动捕获进程退出信息，避免被直接中断
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	http.HandleFunc("/login", handler.LoginHandler)
+	// http.HandleFunc("/login/refresh", nethandler.RefreshHandler)
+	go func() {
+		if err := http.ListenAndServe(":"+fmt.Sprint(serverPort), nil); err != nil {
+			fmt.Printf("服务器启动失败: %v\n", err)
+		}
+		quit <- syscall.SIGTERM
+	}()
+
+	//正常退出程序逻辑，代码上的解释就是手动捕获进程退出信息，避免被直接中断
 	<-quit
+	logger.Log.Info("程序正常退出")
 }
 
 // 初始化函数：解析命令行参数
