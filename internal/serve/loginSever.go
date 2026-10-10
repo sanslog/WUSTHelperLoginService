@@ -48,7 +48,7 @@ retryHere:
 	}
 
 	/*第二步，获取验证码计算值*/
-	code, codeErr := captcha.RecognizeMathCaptcha(ctx, kapMsg.Content)
+	code, codeErr := captcha.RecognizeMathCaptcha(ctx, kapMsg.Content, 0)
 	if codeErr != nil {
 		logger.Log.Error("图片解析失败: " + codeErr.Error())
 
