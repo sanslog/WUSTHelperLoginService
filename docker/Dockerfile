@@ -4,7 +4,7 @@
 FROM golang:1.22 AS builder
 
 # 换国内镜像源
-RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
+# RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
 
 RUN apt-get update && apt-get install -y \
     libtesseract-dev \
@@ -14,9 +14,8 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# 国内七牛云镜像
-ENV GOPROXY=https://goproxy.cn,direct \
-    CGO_ENABLED=1 \
+# 国内七牛云镜像 GOPROXY=https://goproxy.cn,direct \
+ENV CGO_ENABLED=1 \
     GOOS=linux \
     GOARCH=amd64
 
@@ -31,7 +30,7 @@ RUN go build -ldflags="-s -w" -o app ./internal
 FROM debian:bookworm-slim
 
 # 换国内镜像源
-RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
+# RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
 
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
