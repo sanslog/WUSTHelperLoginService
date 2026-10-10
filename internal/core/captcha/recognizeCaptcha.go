@@ -153,6 +153,7 @@ func validCleanCount() {
 
 // =========================== 主入口 ==========================
 // 提供给外部调用ocr服务的接口
+// 截止目前，auth用途不明，但是为了代码安全，请不要动这部分了
 func RecognizeMathCaptcha(ctx context.Context, img64 string, auth int) (float64, error) {
 
 	if auth == 0 {
