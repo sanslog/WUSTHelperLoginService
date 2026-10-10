@@ -10,9 +10,11 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -21,6 +23,7 @@ var (
 	serverPort    int
 	tesseractPath string
 	maxOCRWorkers int
+	queueSize     int
 )
 
 const MaxRetry = 5
@@ -34,17 +37,24 @@ func main() {
 	defer logger.Sync()
 
 	//初始化ocr服务
-	if err := captcha.InitOCR(tesseractPath, maxOCRWorkers); err != nil {
-		panic(err)
-	}
+	captcha.InitOCR(maxOCRWorkers, queueSize)
 	defer captcha.ShutdownOCR()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	http.HandleFunc("/login", handler.LoginHandler)
 	// http.HandleFunc("/login/refresh", nethandler.RefreshHandler)
-	if err := http.ListenAndServe(":"+fmt.Sprint(serverPort), nil); err != nil {
-		fmt.Printf("服务器启动失败: %v\n", err)
-	}
+	go func() {
+		if err := http.ListenAndServe(":"+fmt.Sprint(serverPort), nil); err != nil {
+			fmt.Printf("服务器启动失败: %v\n", err)
+		}
+		quit <- syscall.SIGTERM
+	}()
 
+	//正常退出程序逻辑，代码上的解释就是手动捕获进程退出信息，避免被直接中断
+	<-quit
+	logger.Log.Info("程序正常退出")
 }
 
 // 初始化函数：解析命令行参数
@@ -54,7 +64,8 @@ func init() {
 	// 1. 定义命令行参数
 	flag.IntVar(&serverPort, "p", 0, "服务器端口")
 	flag.StringVar(&customTessPath, "T", "", "Tesseract可执行文件路径")
-	flag.IntVar(&maxOCRWorkers, "w", 3, "OCR服务缓冲通道大小,理想下w=cpu cores*1.5")
+	flag.IntVar(&maxOCRWorkers, "w", 3, "OCR服务Worker Pool大小,理想下w=cpu cores*1.5")
+	flag.IntVar(&queueSize, "qs", 150, "有界任务队列大小")
 
 	// 2. 解析参数
 	flag.Parse()
@@ -68,6 +79,12 @@ func init() {
 
 	if maxOCRWorkers <= 0 || maxOCRWorkers > 50 {
 		fmt.Printf("错误: maxOCRWorkers数量不合法, 请不要把内存当儿戏,你知道2026年初的内存条有多贵吗? 当前值: %d\n", maxOCRWorkers)
+		printUsage()
+		os.Exit(1)
+	}
+
+	if queueSize <= 0 || queueSize > 1500 {
+		fmt.Printf("错误：缓冲队列大小不符合标准。")
 		printUsage()
 		os.Exit(1)
 	}
@@ -215,14 +232,14 @@ func validateTesseract(path string) error {
 // printUsage 打印用法信息
 func printUsage() {
 	fmt.Println("\n用法:")
-	fmt.Println("  myapp.exe -p <端口号> [-T <Tesseract路径>]")
+	fmt.Println("  myapp -p <端口号> [-T <Tesseract路径>]")
 	fmt.Println("\n参数说明:")
 	fmt.Println("  -p  服务器端口 (1-65535，必须)")
 	fmt.Println("  -T  Tesseract可执行文件路径 (可选，为空则自动查找)")
 	fmt.Println("  -W  这个值表示你想分配给Tesseract的内存规模")
-	fmt.Println("\n示例:")
+	fmt.Println("\nWindows平台示例:")
 	fmt.Printf("  myapp.exe -p 8080\n")
-	fmt.Printf("  myapp.exe -p 8080 -T C:\\User\\AppData\\Local\\Programs\\Tesseract-OCR\\tesseract.exe\n")
+	fmt.Printf("  myapp.exe -p 8080 -T C:\\User\\AppData\\Local\\Programs\\Tesseract-OCR\\tesseract.exe -w=3\n")
 	fmt.Println("\n自动查找策略:")
 	fmt.Println("  1. 检查PATH环境变量")
 	fmt.Println("  2. 检查TESSERACT_PATH环境变量")

@@ -64,4 +64,5 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 			"TGC":"` + tgc + `"
 		}`,
 	))
+	logger.Log.Info(username + "登录成功")
 }
